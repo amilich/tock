@@ -198,6 +198,8 @@ pub unsafe fn init() {
         pdest = pdest.offset(1);
     }
 
+
+
     // // 12 mghz from amit
 
     // // unlock
@@ -206,6 +208,15 @@ pub unsafe fn init() {
     // ::core::intrinsics::volatile_store(0x400E0848 as *mut usize, 0b10 << 8 | 1);
     // while ::core::intrinsics::volatile_load(0x400E0848 as *const usize) & 1 == 0 {}
     // pm::select_main_clock(pm::MainClock::RCFAST);
+
+    // return;
+
+// panic!("odd");
+
+}
+
+pub unsafe fn newclock() {
+
 
 
     // 48 MHz DLL from Michael
@@ -237,12 +248,17 @@ pub unsafe fn init() {
     ::core::intrinsics::volatile_store(0x400F0418 as *mut usize, 0xAA000024);
     // Write the BSCIF::RC32KCR register
     ::core::intrinsics::volatile_store(0x400F0424 as *mut usize, bscif_rc32kcr | (1 << 2) | (1 << 0));
+    // Wait for it to be ready, although it feels like this won't do anything
+    while ::core::intrinsics::volatile_load(0x400F0424 as *const usize) & (1 << 0) == 0 {}
+
+
 
     // Next init closed loop mode.
     // For some reason do a SCIF sync before reading the SCIF register
     ::core::intrinsics::volatile_store(0x400E0840 as *mut usize, 1);
     // Wait for it to be ready
     while ::core::intrinsics::volatile_load(0x400E0814 as *const usize) & (1 << 3) == 0 {}
+
     // Read the current DFLL settings
     let scif_dfll0conf = ::core::intrinsics::volatile_load(0x400E0828 as *const usize);
     // Set the new values
@@ -250,26 +266,34 @@ pub unsafe fn init() {
     let scif_dfll0conf_new1 = scif_dfll0conf | (1 << 0) | (1 << 1);
     let scif_dfll0conf_new2 = scif_dfll0conf_new1 & (!(3 << 16));
     let scif_dfll0conf_new3 = scif_dfll0conf_new2 | (2 << 16); // frequency range 2
+    // Enable the general clock. Yeah getting this fields is complicated.
+    //                 enable     RC32K       no divider
+    let scif_gcctrl0 = (1 << 0) | (13 << 8) | (0 << 1) | (0 << 16);
+    ::core::intrinsics::volatile_store(0x400E0874 as *mut usize, scif_gcctrl0);
     // First, enable dfll apparently
     // unlock dfll0conf
     ::core::intrinsics::volatile_store(0x400E0818 as *mut usize, 0xAA000028);
     // enable
     ::core::intrinsics::volatile_store(0x400E0828 as *mut usize, 1);
+    while ::core::intrinsics::volatile_load(0x400E0814 as *const usize) & (1 << 3) == 0 {}
     // Set step values
     // unlock
     ::core::intrinsics::volatile_store(0x400E0818 as *mut usize, 0xAA000034);
     // 4, 4
     ::core::intrinsics::volatile_store(0x400E0834 as *mut usize, (4 << 0) | (4 << 16));
+    while ::core::intrinsics::volatile_load(0x400E0814 as *const usize) & (1 << 3) == 0 {}
     // Set multiply value
     // unlock
     ::core::intrinsics::volatile_store(0x400E0818 as *mut usize, 0xAA000030);
     // 1464 = 48000000 / 32768
     ::core::intrinsics::volatile_store(0x400E0830 as *mut usize, 1464);
+    while ::core::intrinsics::volatile_load(0x400E0814 as *const usize) & (1 << 3) == 0 {}
     // Set SSG value
     // unlock
     ::core::intrinsics::volatile_store(0x400E0818 as *mut usize, 0xAA000038);
     // just set to zero to disable
     ::core::intrinsics::volatile_store(0x400E0838 as *mut usize, 0);
+    while ::core::intrinsics::volatile_load(0x400E0814 as *const usize) & (1 << 3) == 0 {}
     // Set actual configuration
     // unlock
     ::core::intrinsics::volatile_store(0x400E0818 as *mut usize, 0xAA000028);
@@ -278,6 +302,8 @@ pub unsafe fn init() {
 
     // Now wait for it to be ready (DFLL0LOCKF)
     while ::core::intrinsics::volatile_load(0x400E0814 as *const usize) & (1 << 2) == 0 {}
+
+
 
     // Since we are running at a fast speed we have to set a clock delay
     // for flash, as well as enable fast flash mode.
@@ -297,7 +323,7 @@ pub unsafe fn init() {
 
     // Choose the main clock in the PM module.
     pm::select_main_clock(pm::MainClock::DFLL);
-
+// panic!("odd");
 }
 
 unsafe extern "C" fn hard_fault_handler() {
