@@ -213,9 +213,7 @@ pub unsafe fn init() {
 
 // panic!("odd");
 
-}
 
-pub unsafe fn newclock() {
 
 
 
