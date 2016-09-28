@@ -236,6 +236,10 @@ pub unsafe fn init() {
     // sysclk_enable_peripheral_clock(HCACHE);
     // HCACHE->HCACHE_CTRL = HCACHE_CTRL_CEN_YES;
     // while (!(HCACHE->HCACHE_SR & HCACHE_SR_CSTS_EN));
+    pm::enable_clock(pm::Clock::HSB(pm::HSBClock::FLASHCALWP));
+    pm::enable_clock(pm::Clock::PBB(pm::PBBClock::HRAMC1));
+    ::core::intrinsics::volatile_store(0x400A0408 as *mut usize, 1);
+    while ::core::intrinsics::volatile_load(0x400A040c as *const usize) & (1 << 0) == 0 {}
 
     // Using GENCLK_SRC_RC32K as the source for the DFLL. Must enable it first.
     //      BSCIF->BSCIF_UNLOCK = BSCIF_UNLOCK_KEY(0xAAu) | RC32KCR_OFFSET;
