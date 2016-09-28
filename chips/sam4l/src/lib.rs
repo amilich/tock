@@ -266,6 +266,8 @@ pub unsafe fn init() {
     // Set the new values
     //                                        enable     closed loop
     let scif_dfll0conf_new1 = scif_dfll0conf | (1 << 0) | (1 << 1);
+    // let scif_dfll0conf_new1 = (1 << 0) | (1 << 1);
+    // let scif_dfll0conf_new1 = (1 << 0) | (1 << 1) | (1 << 20);
     let scif_dfll0conf_new2 = scif_dfll0conf_new1 & (!(3 << 16));
     let scif_dfll0conf_new3 = scif_dfll0conf_new2 | (2 << 16); // frequency range 2
     // Enable the general clock. Yeah getting this fields is complicated.
@@ -288,7 +290,9 @@ pub unsafe fn init() {
     // unlock
     ::core::intrinsics::volatile_store(0x400E0818 as *mut usize, 0xAA000030);
     // 1464 = 48000000 / 32768
-    ::core::intrinsics::volatile_store(0x400E0830 as *mut usize, 1464);
+    // ::core::intrinsics::volatile_store(0x400E0830 as *mut usize, 1464);
+    // ::core::intrinsics::volatile_store(0x400E0830 as *mut usize, 1500);
+    ::core::intrinsics::volatile_store(0x400E0830 as *mut usize, 1563);
     while ::core::intrinsics::volatile_load(0x400E0814 as *const usize) & (1 << 3) == 0 {}
     // Set SSG value
     // unlock
