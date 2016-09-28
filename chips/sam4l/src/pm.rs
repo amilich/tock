@@ -137,7 +137,12 @@ unsafe fn unlock(register_offset: u32) {
     write_volatile(&mut (*PM).unlock, 0xAA000000 | register_offset);
 }
 
+// pub unsafe fn select_main_clock(clock: MainClock) {
+//     write_volatile(&mut (*PM).mcctrl, clock as u32);
+// }
+
 pub unsafe fn select_main_clock(clock: MainClock) {
+    unlock(0);
     write_volatile(&mut (*PM).mcctrl, clock as u32);
 }
 

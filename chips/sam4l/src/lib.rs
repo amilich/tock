@@ -197,6 +197,107 @@ pub unsafe fn init() {
         *pdest = 0;
         pdest = pdest.offset(1);
     }
+
+    // // 12 mghz from amit
+
+    // // unlock
+    // ::core::intrinsics::volatile_store(0x400E0818 as *mut usize, 0xAA000048);
+    // // enable 12 Mhz RC oscillator
+    // ::core::intrinsics::volatile_store(0x400E0848 as *mut usize, 0b10 << 8 | 1);
+    // while ::core::intrinsics::volatile_load(0x400E0848 as *const usize) & 1 == 0 {}
+    // pm::select_main_clock(pm::MainClock::RCFAST);
+
+
+    // 48 MHz DLL from Michael
+    // Following the `sysclk_init()` code from ASF and these `defines`:
+    // #define CONFIG_SYSCLK_SOURCE        SYSCLK_SRC_DFLL
+    // #define CONFIG_HCACHE_ENABLE          1
+    // #define CONFIG_FLASH_READ_MODE_HIGH_SPEED_ENABLE
+    // #define CONFIG_SYSCLK_CPU_DIV         0
+    // #define CONFIG_SYSCLK_PBA_DIV         0
+    // #define CONFIG_SYSCLK_PBB_DIV         0
+    // #define CONFIG_SYSCLK_PBC_DIV         0
+    // #define CONFIG_SYSCLK_PBD_DIV         0
+    // #define CONFIG_DFLL0_SOURCE         GENCLK_SRC_RC32K
+    // #define CONFIG_DFLL0_FREQ           48000000UL
+    // #define CONFIG_DFLL0_MUL            (CONFIG_DFLL0_FREQ / OSC_RC32K_NOMINAL_HZ)
+    // #define CONFIG_DFLL0_DIV            1
+
+    // TODO: Enable HCACHE
+    // sysclk_enable_peripheral_clock(HCACHE);
+    // HCACHE->HCACHE_CTRL = HCACHE_CTRL_CEN_YES;
+    // while (!(HCACHE->HCACHE_SR & HCACHE_SR_CSTS_EN));
+
+    // Using GENCLK_SRC_RC32K as the source for the DFLL. Must enable it first.
+    //      BSCIF->BSCIF_UNLOCK = BSCIF_UNLOCK_KEY(0xAAu) | RC32KCR_OFFSET;
+    //      BSCIF->BSCIF_RC32KCR = temp | BSCIF_RC32KCR_EN32K | BSCIF_RC32KCR_EN;
+    // Get the original value
+    let bscif_rc32kcr = ::core::intrinsics::volatile_load(0x400F0424 as *const usize);
+    // Unlock the BSCIF::RC32KCR register
+    ::core::intrinsics::volatile_store(0x400F0418 as *mut usize, 0xAA000024);
+    // Write the BSCIF::RC32KCR register
+    ::core::intrinsics::volatile_store(0x400F0424 as *mut usize, bscif_rc32kcr | (1 << 2) | (1 << 0));
+
+    // Next init closed loop mode.
+    // For some reason do a SCIF sync before reading the SCIF register
+    ::core::intrinsics::volatile_store(0x400E0840 as *mut usize, 1);
+    // Wait for it to be ready
+    while ::core::intrinsics::volatile_load(0x400E0814 as *const usize) & (1 << 3) == 0 {}
+    // Read the current DFLL settings
+    let scif_dfll0conf = ::core::intrinsics::volatile_load(0x400E0828 as *const usize);
+    // Set the new values
+    //                                        enable     closed loop
+    let scif_dfll0conf_new1 = scif_dfll0conf | (1 << 0) | (1 << 1);
+    let scif_dfll0conf_new2 = scif_dfll0conf_new1 & (!(3 << 16));
+    let scif_dfll0conf_new3 = scif_dfll0conf_new2 | (2 << 16); // frequency range 2
+    // First, enable dfll apparently
+    // unlock dfll0conf
+    ::core::intrinsics::volatile_store(0x400E0818 as *mut usize, 0xAA000028);
+    // enable
+    ::core::intrinsics::volatile_store(0x400E0828 as *mut usize, 1);
+    // Set step values
+    // unlock
+    ::core::intrinsics::volatile_store(0x400E0818 as *mut usize, 0xAA000034);
+    // 4, 4
+    ::core::intrinsics::volatile_store(0x400E0834 as *mut usize, (4 << 0) | (4 << 16));
+    // Set multiply value
+    // unlock
+    ::core::intrinsics::volatile_store(0x400E0818 as *mut usize, 0xAA000030);
+    // 1464 = 48000000 / 32768
+    ::core::intrinsics::volatile_store(0x400E0830 as *mut usize, 1464);
+    // Set SSG value
+    // unlock
+    ::core::intrinsics::volatile_store(0x400E0818 as *mut usize, 0xAA000038);
+    // just set to zero to disable
+    ::core::intrinsics::volatile_store(0x400E0838 as *mut usize, 0);
+    // Set actual configuration
+    // unlock
+    ::core::intrinsics::volatile_store(0x400E0818 as *mut usize, 0xAA000028);
+    // we already prepared this value
+    ::core::intrinsics::volatile_store(0x400E0828 as *mut usize, scif_dfll0conf_new3);
+
+    // Now wait for it to be ready (DFLL0LOCKF)
+    while ::core::intrinsics::volatile_load(0x400E0814 as *const usize) & (1 << 2) == 0 {}
+
+    // Since we are running at a fast speed we have to set a clock delay
+    // for flash, as well as enable fast flash mode.
+    let flashcalw_fcr = ::core::intrinsics::volatile_load(0x400A0000 as *const usize);
+    ::core::intrinsics::volatile_store(0x400A0000 as *mut usize, flashcalw_fcr | (1 << 6));
+
+    // Enable high speed mode for flash
+    let flashcalw_fcmd = ::core::intrinsics::volatile_load(0x400A0004 as *const usize);
+    let flashcalw_fcmd_new1 = flashcalw_fcmd & (!(0x3F << 0));
+    let flashcalw_fcmd_new2 = flashcalw_fcmd_new1 | (0xA5 << 24) | (0x10 << 0);
+    ::core::intrinsics::volatile_store(0x400A0004 as *mut usize, flashcalw_fcmd_new2);
+
+    // And wait for the flash to be ready
+    while ::core::intrinsics::volatile_load(0x400A0008 as *const usize) & (1 << 0) == 0 {}
+
+    // TODO: run bpm_configure_power_scaling()
+
+    // Choose the main clock in the PM module.
+    pm::select_main_clock(pm::MainClock::DFLL);
+
 }
 
 unsafe extern "C" fn hard_fault_handler() {
