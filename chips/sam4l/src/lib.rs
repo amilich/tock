@@ -249,7 +249,8 @@ pub unsafe fn init() {
     // Unlock the BSCIF::RC32KCR register
     ::core::intrinsics::volatile_store(0x400F0418 as *mut usize, 0xAA000024);
     // Write the BSCIF::RC32KCR register
-    ::core::intrinsics::volatile_store(0x400F0424 as *mut usize, bscif_rc32kcr | (1 << 2) | (1 << 0));
+    // ::core::intrinsics::volatile_store(0x400F0424 as *mut usize, bscif_rc32kcr | (1 << 2) | (1 << 0));
+    ::core::intrinsics::volatile_store(0x400F0424 as *mut usize, bscif_rc32kcr | (1 >> 1) | (1 << 2) | (1 << 0)); // with temp compensation
     // Wait for it to be ready, although it feels like this won't do anything
     while ::core::intrinsics::volatile_load(0x400F0424 as *const usize) & (1 << 0) == 0 {}
 
@@ -290,9 +291,7 @@ pub unsafe fn init() {
     // unlock
     ::core::intrinsics::volatile_store(0x400E0818 as *mut usize, 0xAA000030);
     // 1464 = 48000000 / 32768
-    // ::core::intrinsics::volatile_store(0x400E0830 as *mut usize, 1464);
-    // ::core::intrinsics::volatile_store(0x400E0830 as *mut usize, 1500);
-    ::core::intrinsics::volatile_store(0x400E0830 as *mut usize, 1563);
+    ::core::intrinsics::volatile_store(0x400E0830 as *mut usize, 1464);
     while ::core::intrinsics::volatile_load(0x400E0814 as *const usize) & (1 << 3) == 0 {}
     // Set SSG value
     // unlock
@@ -329,6 +328,13 @@ pub unsafe fn init() {
 
     // Choose the main clock in the PM module.
     pm::select_main_clock(pm::MainClock::DFLL);
+
+    // Load magic calibration value
+    // Unlock the BSCIF::RC32KTUNE register
+    ::core::intrinsics::volatile_store(0x400F0418 as *mut usize, 0xAA000028);
+    // Write the BSCIF::RC32KTUNE register
+    ::core::intrinsics::volatile_store(0x400F0428 as *mut usize, 0x001d0015);
+
 // panic!("odd");
 }
 
