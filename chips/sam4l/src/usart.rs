@@ -117,7 +117,8 @@ impl USART {
     }
 
     fn set_baud_rate(&self, baud_rate: u32) {
-        let cd = 48000000 / (8 * baud_rate);
+        let system_frequency = 48000000;
+        let cd = system_frequency / (8 * baud_rate);
         let regs: &mut Registers = unsafe { mem::transmute(self.regs) };
         write_volatile(&mut regs.brgr, cd);
     }
