@@ -423,6 +423,44 @@ unsafe fn configure_external_oscillator() {
     select_main_clock(MainClock::OSC0);
 }
 
+/// Configure the system clock to use the DFLL with the 16 MHz external crystal.
+unsafe fn configure_external_oscillator_pll() {
+    // Enable HCACHE
+    enable_cache();
+
+    enable_rc32k();
+
+
+    // Check to see if the PLL is already setup.
+    //
+    if ((*SCIF).pclksr.get() & (1 << 6)) == 0 {
+
+        // Enable the OSC0
+        (*SCIF).unlock.set(0xAA000020);
+        // enable, 557 us startup time, gain level 4, is crystal.
+        (*SCIF).oscctrl0.set((1 << 16) | (1 << 8) | (4 << 1) | (1 << 0));
+        // Wait for oscillator to be ready
+        while (*SCIF).pclksr.get() & (1 << 0) == 0 {}
+
+        // Setup PLL
+        // unlock
+        (*SCIF).unlock.set(0xAA000024);
+        let val = (1 << 4) | (5 << 16) | (1 << 8) | (0x3F << 24) | (0 << 1) | (1 << 5);
+        (*SCIF).pll0.set(0);
+        (*SCIF).pll0.set(val);
+        (*SCIF).pll0.set(val | 0x1);
+
+        // Wait
+        while (*SCIF).pclksr.get() & (1 << 6) == 0 {}
+    }
+
+
+    enable_high_speed_flash();
+
+    // Choose the main clock
+    select_main_clock(MainClock::PLL);
+}
+
 pub unsafe fn setup_system_clock(clock_source: SystemClockSource, frequency: u32) {
     SYSTEM_FREQUENCY = frequency;
 
