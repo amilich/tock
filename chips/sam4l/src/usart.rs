@@ -1,4 +1,5 @@
 use core::mem;
+use core::cell::Cell;
 
 use kernel::common::take_cell::TakeCell;
 use dma::{DMAChannel, DMAClient, DMAPeripheral};
@@ -51,6 +52,13 @@ enum UsartClient<'a> {
     SpiMaster(&'a hil::spi::SpiMasterClient),
 }
 
+#[derive(Copy,Clone)]
+enum UsartMode {
+    Uart,
+    Spi,
+    Unused,
+}
+
 pub struct USART {
     regs: *mut Registers,
     client: TakeCell<UsartClient<'static>>,
@@ -58,6 +66,13 @@ pub struct USART {
     nvic: nvic::NvicIdx,
     dma_peripheral: DMAPeripheral,
     dma: Option<&'static mut DMAChannel>,
+
+    usart_mode: Cell<UsartMode>,
+
+    spi_len: Cell<usize>,
+    spi_idx: Cell<usize>,
+    spi_write_buffer: TakeCell<&'static mut [u8]>,
+    spi_read_buffer: TakeCell<Option<&'static mut [u8]>>,
 }
 
 pub struct USARTParams {
@@ -111,6 +126,13 @@ impl USART {
             // This is updated when a
             // real DMA is configured.
             client: TakeCell::empty(),
+
+            usart_mode: Cell::new(UsartMode::Unused),
+
+            spi_len: Cell::new(0),
+            spi_idx: Cell::new(0),
+            spi_write_buffer: TakeCell::empty(),
+            spi_read_buffer: TakeCell::empty(),
         }
     }
 
@@ -177,28 +199,192 @@ impl USART {
     }
 
     pub fn handle_interrupt(&mut self) {
+
+
         use kernel::hil::uart::UART;
         if self.rx_ready() {
+
+
+
             let regs: &Registers = unsafe { mem::transmute(self.regs) };
             let c = read_volatile(&regs.rhr) as u8;
+
+            // let mode = read_volatile(&regs.mr);
+            // panic!("mode {}", self.usart_mode.get() as u8);
+
+
             // match self.client {
-            self.client.map(|usartclient| {
+
                 // Some(client) => {
-                    match usartclient {
-                        &mut UsartClient::Uart(client) => client.read_done(c),
-                        &mut UsartClient::SpiMaster(client) => {},
-                    }
+
+            match self.usart_mode.get() {
+                UsartMode::Uart => {
+                    self.client.map(|usartclient| {
+                        match usartclient {
+                            &mut UsartClient::Uart(client) => client.read_done(c),
+                            &mut UsartClient::SpiMaster(client) => {},
+                        }
+                    });
+                }
+                UsartMode::Spi => {
+                    self.spi_got_byte(c);
+                }
+                _ => {}
+            }
+
+
+                // if mode & 0xF == 0xE {
+                //     // SPI
+
+                // } else if (mode & 0xF == 0x0) || (mode & 0xF == 0x2) {
+
+                // }
+
+
                 // }
 
                     // client.read_done(c),
                 // None => {}
-            });
+            // });
         }
     }
 
     pub fn reset_rx(&mut self) {
         let regs: &mut Registers = unsafe { mem::transmute(self.regs) };
         write_volatile(&mut regs.cr, 1 << 2);
+    }
+
+    fn spi_got_byte(&self, byte: u8) {
+        let regs: &mut Registers = unsafe { mem::transmute(self.regs) };
+// panic!("gob");
+
+        let len = self.spi_len.get();
+        let idx = self.spi_idx.get();
+
+        self.spi_read_buffer.take().map(|read_buffer_option| {
+
+
+
+            if read_buffer_option.is_some() {
+                read_buffer_option.map(|rbuf| {
+
+                    rbuf[idx] = byte;
+
+                    if idx == len - 1 {
+                        // done
+        // panic!("are we ok");
+
+                        // cs high
+                        write_volatile(&mut regs.cr, (1 << 19));
+
+                        write_volatile(&mut regs.cr, (1 << 5) | (1 << 7));
+
+                        self.spi_write_buffer.take().map(|write_buffer| {
+
+                            self.client.map(move |usartclient| {
+
+                                match usartclient {
+                                    &mut UsartClient::Uart(client) => {}
+                                    &mut UsartClient::SpiMaster(client) => {
+                                        client.read_write_done(write_buffer, Some(rbuf), len);
+                                    }
+                                }
+                            });
+                        });
+                    } else {
+                        self.spi_idx.set(idx+1);
+
+                        self.spi_write_buffer.map(|write_buffer| {
+                            write_volatile(&mut regs.thr, write_buffer[idx+1] as u32);
+                        });
+
+                        self.spi_read_buffer.replace(Some(rbuf));
+
+
+                    }
+
+                    // while read_volatile(&mut regs.csr) & 0x2 == 0 {}
+
+
+                    // // cs low
+                    // write_volatile(&mut regs.cr, (1 << 18));
+
+                    // for i in 0..len {
+                    //     write_volatile(&mut regs.thr, write_buffer[i] as u32);
+
+                    //     while read_volatile(&mut regs.csr) & 0x1 == 0 {}
+
+                    //     rbuf[i] = read_volatile(&mut regs.rhr) as u8;
+                    // }
+
+
+
+
+                });
+            } else {
+                // Just go ahead and put this back...
+                self.spi_read_buffer.replace(read_buffer_option);
+
+                if idx == len - 1 {
+                    // done
+
+                    // cs high
+                    write_volatile(&mut regs.cr, (1 << 19));
+
+                    // disable
+                    write_volatile(&mut regs.cr, (1 << 5) | (1 << 7));
+
+                    self.spi_write_buffer.take().map(|write_buffer| {
+
+                        self.client.map(move |usartclient| {
+                            match usartclient {
+                                &mut UsartClient::Uart(client) => {}
+                                &mut UsartClient::SpiMaster(client) => {
+                                    client.read_write_done(write_buffer, None, len);
+                                }
+                            }
+                        });
+                    });
+                } else {
+                    self.spi_idx.set(idx+1);
+
+                    self.spi_write_buffer.map(|write_buffer| {
+                        write_volatile(&mut regs.thr, write_buffer[idx+1] as u32);
+                    });
+
+
+                }
+
+                // while read_volatile(&mut regs.csr) & 0x2 == 0 {}
+
+                // // panic!("tx ready");
+
+                // // cs low
+                // write_volatile(&mut regs.cr, (1 << 18));
+
+                // for i in 0..len {
+                //     write_volatile(&mut regs.thr, write_buffer[i] as u32);
+
+                //     while read_volatile(&mut regs.csr) & 0x1 == 0 {}
+
+                //     let k = read_volatile(&mut regs.rhr);
+                // }
+
+                // // cs high
+                // write_volatile(&mut regs.cr, (1 << 19));
+
+                // write_volatile(&mut regs.cr, (1 << 5) | (1 << 7));
+
+                // self.client.map(move |usartclient| {
+                //     match usartclient {
+                //         &mut UsartClient::Uart(client) => {}
+                //         &mut UsartClient::SpiMaster(client) => {
+                //             client.read_write_done(write_buffer, None, len);
+                //         }
+                //     }
+                // });
+            }
+        });
     }
 }
 
@@ -228,6 +414,7 @@ impl DMAClient for USART {
 
 impl uart::UART for USART {
     fn init(&mut self, params: uart::UARTParams) {
+        panic!("now way this gets called {}", self.usart_mode.get() as u8);
         let chrl = ((params.data_bits - 1) & 0x3) as u32;
         let mode =
             (params.mode as u32) /* mode */
@@ -242,6 +429,10 @@ impl uart::UART for USART {
         self.set_mode(mode);
         let regs: &mut Registers = unsafe { mem::transmute(self.regs) };
         write_volatile(&mut regs.ttgr, 4);
+
+        self.usart_mode.set(UsartMode::Uart);
+
+
     }
 
     fn send_byte(&self, byte: u8) {
@@ -304,7 +495,7 @@ impl hil::spi::SpiMaster for USART {
         // let chrl = ((params.data_bits - 1) & 0x3) as u32;
 
 
-
+        self.usart_mode.set(UsartMode::Spi);
 
 
         self.enable_clock();
@@ -325,6 +516,9 @@ impl hil::spi::SpiMaster for USART {
 
         // Disable transmitter timeguard
         write_volatile(&mut regs.ttgr, 4);
+
+
+
     }
 
 
@@ -345,12 +539,99 @@ impl hil::spi::SpiMaster for USART {
                         -> bool {
 
 
+        self.enable_rx_interrupts();
+
         // enable rx and tx
         let regs: &mut Registers = unsafe { mem::transmute(self.regs) };
         write_volatile(&mut regs.cr, (1 << 4) | (1 << 6));
 
+    // if len == 5 {
+    //     panic!("5555555");
+    // }
 
-        write_volatile(&mut regs.thr, 0x9);
+
+        self.spi_len.set(len);
+        self.spi_idx.set(0);
+
+        // cs low
+        write_volatile(&mut regs.cr, (1 << 18));
+
+
+        write_volatile(&mut regs.thr, write_buffer[0] as u32);
+        self.spi_write_buffer.replace(write_buffer);
+        self.spi_read_buffer.replace(read_buffer);
+
+
+
+
+
+        // if read_buffer.is_some() {
+        //     read_buffer.map(|rbuf| {
+
+        //         while read_volatile(&mut regs.csr) & 0x2 == 0 {}
+
+
+        //         // cs low
+        //         write_volatile(&mut regs.cr, (1 << 18));
+
+        //         for i in 0..len {
+        //             write_volatile(&mut regs.thr, write_buffer[i] as u32);
+
+        //             while read_volatile(&mut regs.csr) & 0x1 == 0 {}
+
+        //             rbuf[i] = read_volatile(&mut regs.rhr) as u8;
+        //         }
+
+        //         // cs high
+        //         write_volatile(&mut regs.cr, (1 << 19));
+
+        //         write_volatile(&mut regs.cr, (1 << 5) | (1 << 7));
+
+        //         self.client.map(move |usartclient| {
+        //             match usartclient {
+        //                 &mut UsartClient::Uart(client) => {}
+        //                 &mut UsartClient::SpiMaster(client) => {
+        //                     client.read_write_done(write_buffer, Some(rbuf), len);
+        //                 }
+        //             }
+        //         });
+        //     });
+        // } else {
+
+        //     while read_volatile(&mut regs.csr) & 0x2 == 0 {}
+
+        //     // panic!("tx ready");
+
+        //     // cs low
+        //     write_volatile(&mut regs.cr, (1 << 18));
+
+        //     for i in 0..len {
+        //         write_volatile(&mut regs.thr, write_buffer[i] as u32);
+
+        //         while read_volatile(&mut regs.csr) & 0x1 == 0 {}
+
+        //         let k = read_volatile(&mut regs.rhr);
+        //     }
+
+        //     // cs high
+        //     write_volatile(&mut regs.cr, (1 << 19));
+
+        //     write_volatile(&mut regs.cr, (1 << 5) | (1 << 7));
+
+        //     self.client.map(move |usartclient| {
+        //         match usartclient {
+        //             &mut UsartClient::Uart(client) => {}
+        //             &mut UsartClient::SpiMaster(client) => {
+        //                 client.read_write_done(write_buffer, None, len);
+        //             }
+        //         }
+        //     });
+        // }
+
+
+
+
+        // write_volatile(&mut regs.thr, 0x9);
 
         return false;
     }
@@ -393,15 +674,52 @@ impl hil::spi::SpiMaster for USART {
     fn get_rate(&self) -> u32 {
         return 0;
     }
-    fn set_clock(&self, polarity: hil::spi::ClockPolarity) {}
-    fn get_clock(&self) -> hil::spi::ClockPolarity {
-        return hil::spi::ClockPolarity::IdleLow;
-    }
-    fn set_phase(&self, phase: hil::spi::ClockPhase) {
+    fn set_clock(&self, polarity: hil::spi::ClockPolarity) {
+        let regs: &mut Registers = unsafe { mem::transmute(self.regs) };
+        let mode = read_volatile(&mut regs.mr);
 
+        match polarity {
+            hil::spi::ClockPolarity::IdleLow => {
+                write_volatile(&mut regs.mr, mode & !(1 << 16));
+            }
+            hil::spi::ClockPolarity::IdleHigh => {
+                write_volatile(&mut regs.mr, mode | (1 << 16));
+            }
+        }
     }
+
+    fn get_clock(&self) -> hil::spi::ClockPolarity {
+        let regs: &mut Registers = unsafe { mem::transmute(self.regs) };
+        let mode = read_volatile(&mut regs.mr);
+
+        match mode & (1 << 16) {
+            0 => hil::spi::ClockPolarity::IdleLow,
+            _ => hil::spi::ClockPolarity::IdleHigh,
+        }
+    }
+
+    fn set_phase(&self, phase: hil::spi::ClockPhase) {
+        let regs: &mut Registers = unsafe { mem::transmute(self.regs) };
+        let mode = read_volatile(&mut regs.mr);
+
+        match phase {
+            hil::spi::ClockPhase::SampleLeading => {
+                write_volatile(&mut regs.mr, mode | (1 << 8));
+            }
+            hil::spi::ClockPhase::SampleTrailing => {
+                write_volatile(&mut regs.mr, mode & !(1 << 8));
+            }
+        }
+    }
+
     fn get_phase(&self) -> hil::spi::ClockPhase {
-        return hil::spi::ClockPhase::SampleLeading;
+        let regs: &mut Registers = unsafe { mem::transmute(self.regs) };
+        let mode = read_volatile(&mut regs.mr);
+
+        match mode & (1 << 8) {
+            0 => hil::spi::ClockPhase::SampleLeading,
+            _ => hil::spi::ClockPhase::SampleTrailing,
+        }
     }
 
     // These two functions determine what happens to the chip

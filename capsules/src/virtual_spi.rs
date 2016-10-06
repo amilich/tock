@@ -37,6 +37,7 @@ impl<'a> MuxSPIMaster<'a> {
             let mnode = self.devices.iter().find(|node| node.operation.get() != Op::Idle);
             mnode.map(|node| {
 
+
                 match node.operation.get() {
                     Op::Configure(cpol, cpal, rate) => {
 
@@ -62,9 +63,17 @@ impl<'a> MuxSPIMaster<'a> {
                         self.spi.set_phase(cpal);
                         self.spi.set_rate(rate);
 
+                        node.operation.set(Op::Idle);
+
 
                     }
                     Op::ReadWriteBytes(len) => {
+
+                        // Only async operations want to block by setting the devices
+                        // as inflight.
+                        self.inflight.replace(node);
+
+                        node.operation.set(Op::Idle);
 
                         node.txbuffer.take().map(|txbuffer| {
                             node.rxbuffer.take().map(move |rxbuffer| {
@@ -72,13 +81,13 @@ impl<'a> MuxSPIMaster<'a> {
                             });
                         });
 
-                        // Only async operations want to block by setting the devices
-                        // as inflight.
-                        self.inflight.replace(node);
+
                     }
                     Op::Idle => {} // Can't get here...
                 }
-                node.operation.set(Op::Idle);
+
+                // node.operation.set(Op::Idle);
+
             });
         }
     }
