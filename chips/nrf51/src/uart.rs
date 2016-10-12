@@ -154,15 +154,29 @@ impl UART {
         if rx {
             let val = regs.rxd.get();
             match self.client {
-                Some(ref client) => client.read_done(val as u8),
+                Some(ref client) => {
+                    client.read_done(val as u8);
+                    panic!(":("); 
+                },
                 None => {}
             }
         }
         if tx {
+            regs.event_txdrdy.set(0 as u32);
+            
             if self.len.get() == self.index.get() {
                 regs.task_stoptx.set(1 as u32);
+
+                // Signal client write done 
+                match self.client {
+                    Some(ref client) => {
+                        client.write_done(self.buffer.take().unwrap())
+                    },
+                    None => {}
+                }
                 return;
             }
+
             self.buffer.map(|buffer| {
                 regs.event_txdrdy.set(0 as u32);
                 regs.txd.set(buffer[self.index.get()] as u32);
@@ -216,10 +230,13 @@ impl uart::UART for UART {
     }
 
     fn read_byte(&self) -> u8 {
-        let regs: &Registers = unsafe { mem::transmute(self.regs) };
-        regs.task_startrx.set(1 as u32);
-        while !self.rx_ready() {}
-        regs.rxd.get() as u8
+        // let regs: &Registers = unsafe { mem::transmute(self.regs) };
+        self.enable_rx(); 
+        self.enable_rx_interrupts(); 
+        1
+        // regs.task_startrx.set(1 as u32);
+        // while !self.rx_ready() {}
+        // regs.rxd.get() as u8
     }
 
     fn enable_rx(&self) {

@@ -223,6 +223,7 @@ pub unsafe fn reset_handler() {
     chip.systick().enable(true);
 
     nrf51::uart::UART0.send_bytes(&mut bytes, bytes.len());
+    nrf51::uart::UART0.read_byte(); 
 
     kernel::main(platform, &mut chip, load_process());
 

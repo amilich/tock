@@ -7,6 +7,7 @@ int main(void) {
 
     while(1) {
       gpio_toggle(LED_0);
+      //printf("Blink\n"); 
       delay_ms(500);
     }
 }
