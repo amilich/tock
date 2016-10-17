@@ -8,6 +8,7 @@ int main(void) {
     while(1) {
       gpio_toggle(LED_0);
       delay_ms(500);
+      printf("HI!");
     }
 }
 
