@@ -12,8 +12,8 @@ prevent race conditions and make it impossible to write code that produces
 dangling pointers.
 
 Borrowing is the Rust mechanism to allow references to
-memory. Similarly references in C++ and other languages, borrows makes
-it possible to efficiently pass large structures by passing pointer
+memory. Similar to references in C++ and other languages, borrows makes
+it possible to efficiently pass large structures by passing pointers
 rather than copying the entire structure.  The Rust compiler, however,
 limits borrows so that they cannot create race conditions, which are
 caused by concurrent writes or concurrent reads and writes to
@@ -52,8 +52,8 @@ Rust's type safety:
 >  }
 
 But what does this mean for Tock? As the Tock kernel is single
-threaded, it doesn't have race conditions and so it can in some
-cases be safe for there to be multiple references, as long as they
+threaded, it doesn't have race conditions and so it can,in some
+cases, be safe for there to be multiple references, as long as they
 do not reference inside each other (as in the number/pointer example).
 However, Rust doesn't know this so its rules still hold. In practice,
 Rust's rules cause problems in event-driven code.
