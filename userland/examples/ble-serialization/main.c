@@ -19,12 +19,16 @@
 #include "nrf.h"
 #include "env_sense_service.h"
 
+#include <gpio.h>
+
 
 /*******************************************************************************
  * BLE
  ******************************************************************************/
 
 uint16_t conn_handle = BLE_CONN_HANDLE_INVALID;
+
+// nrf pwr pin -> low 
 
 // Intervals for advertising and connections
 //char device_name[] = "FSTORM";
@@ -122,6 +126,8 @@ static void temp_callback (int temp_value, int error_code, int unused, void* ud)
 
 int main () {
     printf("Starting BLE serialization example\n");
+    // gpio_enable_output(7);
+    // gpio_clear(7);
 
     // Setup BLE
     conn_handle = simple_ble_init(&ble_config)->conn_handle;

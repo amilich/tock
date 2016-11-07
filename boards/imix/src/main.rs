@@ -9,9 +9,11 @@ extern crate sam4l;
 
 use capsules::timer::TimerDriver;
 use capsules::virtual_alarm::{MuxAlarm, VirtualMuxAlarm};
+use capsules::nrf51822_serialization::{self, Nrf51822Serialization};
 use capsules::virtual_i2c::{I2CDevice, MuxI2C};
 use kernel::{Chip, MPU};
 use kernel::hil::Controller;
+use sam4l::usart;
 
 mod io;
 
@@ -22,6 +24,7 @@ struct Imix {
     isl29035: &'static capsules::isl29035::Isl29035<'static>,
     adc: &'static capsules::adc::ADC<'static, sam4l::adc::Adc>,
     led: &'static capsules::led::LED<'static, sam4l::gpio::GPIOPin>,
+    nrf51822: &'static Nrf51822Serialization<'static, usart::USART>,
 }
 
 impl kernel::Platform for Imix {
@@ -302,15 +305,16 @@ pub unsafe fn reset_handler() {
 
     // set GPIO driver controlling remaining GPIO pins
     let gpio_pins = static_init!(
-        [&'static sam4l::gpio::GPIOPin; 7],
-        [&sam4l::gpio::PC[31], // P2
-         &sam4l::gpio::PC[30], // P3
-         &sam4l::gpio::PC[29], // P4
-         &sam4l::gpio::PC[28], // P5
-         &sam4l::gpio::PC[27], // P6
-         &sam4l::gpio::PC[26], // P7
-         &sam4l::gpio::PC[25]], // P8
-        7 * 4
+        [&'static sam4l::gpio::GPIOPin; 8],
+        [&sam4l::gpio::PC[31],  // P2
+         &sam4l::gpio::PC[30],  // P3
+         &sam4l::gpio::PC[29],  // P4
+         &sam4l::gpio::PC[28],  // P5
+         &sam4l::gpio::PC[27],  // P6
+         &sam4l::gpio::PC[26],  // P7
+         &sam4l::gpio::PC[25],  // P8
+         &sam4l::gpio::PC[17]], // nRF power enable (active low)
+        8 * 4
     );
     let gpio = static_init!(
         capsules::gpio::GPIO<'static, sam4l::gpio::GPIOPin>,
@@ -331,6 +335,16 @@ pub unsafe fn reset_handler() {
         capsules::led::LED::new(led_pins, capsules::led::ActivationMode::ActiveHigh),
         96/8);
 
+    // nrf  
+    // Create the Nrf51822Serialization driver for passing BLE commands
+    // over UART to the nRF51822 radio.
+    let nrf_serialization = static_init!(
+        Nrf51822Serialization<usart::USART>,
+        Nrf51822Serialization::new(&usart::USART2,
+                                   &mut nrf51822_serialization::WRITE_BUF),
+        68);
+    usart::USART2.set_client(nrf_serialization);
+
     let mut imix = Imix {
         console: console,
         timer: timer,
@@ -338,6 +352,7 @@ pub unsafe fn reset_handler() {
         isl29035: isl29035,
         adc: adc,
         led: led,
+        nrf51822: nrf_serialization,
     };
 
     let mut chip = sam4l::chip::Sam4l::new();
