@@ -116,7 +116,10 @@ void calibrate_filters() {
   while (trx_reg_read(RF233_REG_FTN_CTRL) & 0x80);
 }
 
-int main() {
+uint8_t recv_data[128]; 
+
+int main() { 
+  //               FCF   FCF  Seq# Addr1 Addr1  Addr2 Addr2 Pan1  Pan2  Payload
   char buf[10] = {0x61, 0xAA, 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xdd};
  
   rf233_init();
@@ -429,16 +432,42 @@ static void rf_generate_random_seed(void) {
 }
 
 /*---------------------------------------------------------------------------*/
+// Assumption: data has room in the front for 0x61, 0xAA, 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF
+static int counter = 0;
+static uint8_t fcf_and_addr[9] = {0x61, 0xAA, 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}; 
+void rf233_append_mac_header(void *data) {
+  int i; 
+  // set the sequence number 
+  fcf_and_addr[2] = (uint8_t)(counter & 0xFF); 
+  for (i = 0; i < 9; i ++) {
+    ((uint8_t *)data)[i] = fcf_and_addr[i]; 
+  }
+}
+
+/*---------------------------------------------------------------------------*/
+// Append header with FCF, sequence number, 
+int rf233_prepare_without_header(const uint8_t *data, unsigned short data_len) {
+  // append mac header with length 9
+  uint8_t data_with_header[data_len + 9]; 
+  int i; 
+  for (i = 0; i < data_len; i ++) {
+    data_with_header[i + 9] = ((uint8_t*)data)[i];
+  }
+  rf233_append_mac_header(data_with_header); 
+  // first 9 bytes are now MAC header 
+  return rf233_prepare(data_with_header, data_len + 9);
+}
+
+/*---------------------------------------------------------------------------*/
 /**
  * \brief      prepare a frame and the radio for immediate transmission 
  * \param payload         Pointer to data to copy/send
  * \param payload_len     length of data to copy
  * \return     Returns success/fail, refer to radio.h for explanation
  */
-
-static int counter = 0;
 int rf233_prepare(const void *payload, unsigned short payload_len) {
   int i;
+  // Frame length is number of bytes in MPDU 
   uint8_t templen;
   uint8_t radio_status;
   uint8_t data[130];
@@ -450,7 +479,7 @@ int rf233_prepare(const void *payload, unsigned short payload_len) {
     data[i + 1] = ((uint8_t*)payload)[i];
   }
   data[3] = (uint8_t)(counter & 0xff);
-  counter++;
+  counter ++;
 
 #if DEBUG_PRINTDATA
   PRINTF("RF233 prepare (%u/%u): 0x", payload_len, templen);
@@ -619,6 +648,10 @@ int rf233_read(void *buf, unsigned short bufsize) {
     PRINTF("  PAN: %x\n", header->pan);
     PRINTF("  DST: %x\n", header->dest);
     PRINTF("  SRC: %x\n", header->src);
+  }
+  // skip first 9 bytes of header
+  for (int i = 9; i < bufsize; i ++) {
+    recv_data[i - 9] = ((uint8_t*)buf)[i]; 
   }
 
   flush_buffer();
