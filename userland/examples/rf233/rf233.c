@@ -30,6 +30,7 @@ static uint8_t ack_status = 0;
 static volatile int radio_is_on = 0;
 static volatile int pending_frame = 0;
 static volatile int sleep_on = 0;
+static int rf233_prepare_without_header(const uint8_t *data, unsigned short data_len); 
 
 #define IEEE802154_CONF_PANID 0x1111
 
@@ -51,7 +52,7 @@ int rf233_pending_packet(void);
 int rf233_on(void);
 int rf233_off(void);
 int rf233_sleep(void);
-
+int rf233_prep_and_send(const void *, unsigned short); 
 
 /*---------------------------------------------------------------------------*/
 /* convenience macros */
@@ -446,7 +447,7 @@ void rf233_append_mac_header(void *data) {
 }
 
 int rf233_prep_and_send(const void *data, unsigned short data_len) {
-  PRINTF("RF233: send %u\n", payload_len);
+  PRINTF("RF233: send %u\n", data_len);
   if (rf233_prepare_without_header(data, data_len) != RADIO_TX_OK) {
     return RADIO_TX_ERR;
   } 
@@ -455,7 +456,7 @@ int rf233_prep_and_send(const void *data, unsigned short data_len) {
 
 /*---------------------------------------------------------------------------*/
 // Append header with FCF, sequence number, 
-int rf233_prepare_without_header(const uint8_t *data, unsigned short data_len) {
+static int rf233_prepare_without_header(const uint8_t *data, unsigned short data_len) {
   // append mac header with length 9
   uint8_t data_with_header[data_len + 9]; 
   int i; 
