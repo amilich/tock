@@ -120,11 +120,12 @@ uint8_t recv_data[128];
 
 int main() { 
   //               FCF   FCF  Seq# Addr1 Addr1  Addr2 Addr2 Pan1  Pan2  Payload
-  char buf[10] = {0x61, 0xAA, 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xdd};
+  // char buf[10] = {0x61, 0xAA, 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xdd};
+  char buf[1] = { 0xdd }; 
  
   rf233_init();
   while (1) {
-    rf233_send(buf, 10);
+    rf233_prep_and_send(buf, 1);
     delay_ms(10);
     rf233_sleep();
     delay_ms(1000);
@@ -444,6 +445,14 @@ void rf233_append_mac_header(void *data) {
   }
 }
 
+int rf233_prep_and_send(const void *data, unsigned short data_len) {
+  PRINTF("RF233: send %u\n", payload_len);
+  if (rf233_prepare_without_header(data, data_len) != RADIO_TX_OK) {
+    return RADIO_TX_ERR;
+  } 
+  return rf233_transmit();
+}
+
 /*---------------------------------------------------------------------------*/
 // Append header with FCF, sequence number, 
 int rf233_prepare_without_header(const uint8_t *data, unsigned short data_len) {
@@ -559,6 +568,7 @@ int rf233_transmit() {
   
   return RADIO_TX_OK;
 }
+
 /*---------------------------------------------------------------------------*/
 /**
  * \brief      Send data: first prepares, then transmits
