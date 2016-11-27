@@ -88,6 +88,7 @@ struct Firestorm {
     adc: &'static capsules::adc::ADC<'static, sam4l::adc::Adc>,
     led: &'static capsules::led::LED<'static, sam4l::gpio::GPIOPin>,
     ipc: kernel::ipc::IPC,
+    FXOS8700CQ: &'static capsules::FXOS8700CQ::FXOS8700CQ<'static>,
 }
 
 impl Platform for Firestorm {
@@ -302,6 +303,14 @@ pub unsafe fn reset_handler() {
         capsules::led::LED::new(led_pins, capsules::led::ActivationMode::ActiveHigh),
         96/8);
 
+    // accelerometer on 0x1C, 0x1D, 0x1E, or 0x1F?? 
+    let fx0_i2c = static_init!(I2CDevice, I2CDevice::new(mux_i2c, 0x1C), 32);
+    let fx0 = static_init!(
+        capsules::FXOS8700CQ::FXOS8700CQ<'static>,
+        capsules::FXOS8700CQ::FXOS8700CQ::new(fx0_i2c, &mut capsules::FXOS8700CQ::BUF),
+        48);
+    fx0_i2c.set_client(fx0);
+
     // Setup ADC
     let adc = static_init!(
         capsules::adc::ADC<'static, sam4l::adc::Adc>,
@@ -341,6 +350,7 @@ pub unsafe fn reset_handler() {
     // &sam4l::gpio::PA[14] // No Connection
     //
 
+<<<<<<< ece278733632655bd74374c44518be3c42f49639
     let firestorm = Firestorm {
         console: console,
         gpio: gpio,
@@ -352,6 +362,7 @@ pub unsafe fn reset_handler() {
         adc: adc,
         led: led,
         ipc: kernel::ipc::IPC::new(),
+        FXOS8700CQ: fx0,
     };
 
     // Configure USART2 Pins for connection to nRF51822
