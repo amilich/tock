@@ -387,7 +387,8 @@ pub unsafe fn reset_handler() {
     // gpio_dummy::gpio_dummy_test();
 
     // Uncommenting the following line will test the I2C
-    // i2c_dummy::i2c_scan_slaves();
+    println!("I2C dummy test..."); 
+    i2c_dummy::i2c_scan_slaves();
     // i2c_dummy::i2c_tmp006_test();
     // i2c_dummy::i2c_accel_test();
     // i2c_dummy::i2c_li_test();
