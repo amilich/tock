@@ -27,6 +27,7 @@ impl hil::i2c::I2CHwMasterClient for ScanClient {
 
         let dev = unsafe { &mut i2c::I2C2 };
         if dev_id < 0x7F {
+            println!("Now at {}", dev_id); 
             dev_id += 1;
             self.dev_id.set(dev_id);
             dev.write(dev_id, i2c::START | i2c::STOP, buffer, 1);
