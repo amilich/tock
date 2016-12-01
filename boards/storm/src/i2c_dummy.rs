@@ -1,8 +1,9 @@
 //! A dummy I2C client
 
 use core::cell::Cell;
-use hil;
-use hil::i2c::I2CController;
+use kernel::hil;
+use kernel::hil::i2c::I2CMaster;
+use kernel::hil::i2c::I2CHwMasterClient;
 use sam4l::i2c;
 
 // ===========================================
@@ -15,7 +16,7 @@ struct ScanClient {
 
 static mut SCAN_CLIENT: ScanClient = ScanClient { dev_id: Cell::new(1) };
 
-impl hil::i2c::I2CClient for ScanClient {
+impl hil::i2c::I2CHwMasterClient for ScanClient {
     fn command_complete(&self, buffer: &'static mut [u8], error: hil::i2c::Error) {
         let mut dev_id = self.dev_id.get();
 
@@ -42,7 +43,7 @@ pub fn i2c_scan_slaves() {
     let dev = unsafe { &mut i2c::I2C2 };
 
     let i2c_client = unsafe { &SCAN_CLIENT };
-    dev.set_client(i2c_client);
+    dev.set_master_client(i2c_client);
     dev.enable();
 
     println!("Scanning for I2C devices...");
@@ -96,30 +97,30 @@ impl hil::i2c::I2CClient for TMP006Client {
     }
 }
 
-pub fn i2c_tmp006_test() {
-    static mut DATA: [u8; 255] = [0; 255];
+// pub fn i2c_tmp006_test() {
+//     static mut DATA: [u8; 255] = [0; 255];
 
-    unsafe {
-        use sam4l;
-        sam4l::gpio::PA[16].enable_output();
-        sam4l::gpio::PA[16].set();
-    }
+//     unsafe {
+//         use sam4l;
+//         sam4l::gpio::PA[16].enable_output();
+//         sam4l::gpio::PA[16].set();
+//     }
 
 
-    let dev = unsafe { &mut i2c::I2C2 };
+//     let dev = unsafe { &mut i2c::I2C2 };
 
-    let i2c_client = unsafe { &TMP006_CLIENT };
-    dev.set_client(i2c_client);
-    dev.enable();
+//     let i2c_client = unsafe { &TMP006_CLIENT };
+//     dev.set_master_client(i2c_client);
+//     dev.enable();
 
-    let buf = unsafe { &mut DATA };
-    println!("Enabling TMP006...");
-    let config = 0x7100 | (((2 & 0x7) as u16) << 9);
-    buf[0] = 0x2 as u8; // 0x2 == Configuration register
-    buf[1] = ((config & 0xFF00) >> 8) as u8;
-    buf[2] = (config & 0x00FF) as u8;
-    dev.write(0x40, i2c::START | i2c::STOP, buf, 3);
-}
+//     let buf = unsafe { &mut DATA };
+//     println!("Enabling TMP006...");
+//     let config = 0x7100 | (((2 & 0x7) as u16) << 9);
+//     buf[0] = 0x2 as u8; // 0x2 == Configuration register
+//     buf[1] = ((config & 0xFF00) >> 8) as u8;
+//     buf[2] = (config & 0x00FF) as u8;
+//     dev.write(0x40, i2c::START | i2c::STOP, buf, 3);
+// }
 
 // ===========================================
 // Test FXOS8700CQ
@@ -195,21 +196,21 @@ impl hil::i2c::I2CClient for AccelClient {
     }
 }
 
-pub fn i2c_accel_test() {
-    static mut DATA: [u8; 255] = [0; 255];
+// pub fn i2c_accel_test() {
+//     static mut DATA: [u8; 255] = [0; 255];
 
-    let dev = unsafe { &mut i2c::I2C2 };
+//     let dev = unsafe { &mut i2c::I2C2 };
 
-    let i2c_client = unsafe { &ACCEL_CLIENT };
-    dev.set_client(i2c_client);
-    dev.enable();
+//     let i2c_client = unsafe { &ACCEL_CLIENT };
+//     dev.set_master_client(i2c_client);
+//     dev.enable();
 
-    let buf = unsafe { &mut DATA };
-    println!("Reading Accel's WHOAMI...");
-    buf[0] = 0x0D as u8; // 0x0D == WHOAMI register
-    dev.write_read(0x1e, buf, 1, 1);
-    i2c_client.state.set(AccelClientState::ReadingWhoami);
-}
+//     let buf = unsafe { &mut DATA };
+//     println!("Reading Accel's WHOAMI...");
+//     buf[0] = 0x0D as u8; // 0x0D == WHOAMI register
+//     dev.write_read(0x1e, buf, 1, 1);
+//     i2c_client.state.set(AccelClientState::ReadingWhoami);
+// }
 
 
 // ===========================================
@@ -253,26 +254,26 @@ impl hil::i2c::I2CClient for LiClient {
     }
 }
 
-pub fn i2c_li_test() {
-    static mut DATA: [u8; 255] = [0; 255];
+// pub fn i2c_li_test() {
+//     static mut DATA: [u8; 255] = [0; 255];
 
-    unsafe {
-        use sam4l;
-        sam4l::gpio::PA[16].enable_output();
-        sam4l::gpio::PA[16].set();
-    }
+//     unsafe {
+//         use sam4l;
+//         sam4l::gpio::PA[16].enable_output();
+//         sam4l::gpio::PA[16].set();
+//     }
 
-    let dev = unsafe { &mut i2c::I2C2 };
+//     let dev = unsafe { &mut i2c::I2C2 };
 
-    let i2c_client = unsafe { &LI_CLIENT };
-    dev.set_client(i2c_client);
-    dev.enable();
+//     let i2c_client = unsafe { &LI_CLIENT };
+//     dev.set_master_client(i2c_client);
+//     dev.enable();
 
-    let buf = unsafe { &mut DATA };
-    println!("Enabling LI...");
-    buf[0] = 0;
-    buf[1] = 0b10100000;
-    buf[2] = 0b00000000;
-    dev.write(0x44, i2c::START | i2c::STOP, buf, 3);
-    i2c_client.state.set(LiClientState::Enabling);
-}
+//     let buf = unsafe { &mut DATA };
+//     println!("Enabling LI...");
+//     buf[0] = 0;
+//     buf[1] = 0b10100000;
+//     buf[2] = 0b00000000;
+//     dev.write(0x44, i2c::START | i2c::STOP, buf, 3);
+//     i2c_client.state.set(LiClientState::Enabling);
+// }
