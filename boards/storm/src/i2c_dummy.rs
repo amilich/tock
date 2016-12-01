@@ -18,6 +18,7 @@ static mut SCAN_CLIENT: ScanClient = ScanClient { dev_id: Cell::new(1) };
 
 impl hil::i2c::I2CHwMasterClient for ScanClient {
     fn command_complete(&self, buffer: &'static mut [u8], error: hil::i2c::Error) {
+        println!("Cmd complete"); 
         let mut dev_id = self.dev_id.get();
 
         match error {
