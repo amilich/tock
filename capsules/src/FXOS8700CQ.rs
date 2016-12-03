@@ -101,7 +101,8 @@ impl<'a> I2CClient for FXOS8700CQ<'a> {
 
                 buffer[0] = Registers::CtrlReg1 as u8; // CTRL_REG1
                 buffer[1] = 0; // diasabled 
-                
+             
+                self.state.set(State::Disabled);   
                 // self.i2c.write(buffer, 2);
                 // self.state.set(State::Enabling);
                 // self.state.set(State::Deactivating);
