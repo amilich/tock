@@ -350,7 +350,6 @@ pub unsafe fn reset_handler() {
     // &sam4l::gpio::PA[14] // No Connection
     //
 
-<<<<<<< ece278733632655bd74374c44518be3c42f49639
     let firestorm = Firestorm {
         console: console,
         gpio: gpio,
