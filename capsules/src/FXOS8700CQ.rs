@@ -17,29 +17,30 @@ enum Registers {
     OutZMSB = 0x05,
     OutZLSB = 0x06,
     XyzDataCfg = 0x0E,
+    WhoAmI = 0x0D, 
     CtrlReg1 = 0x2A,
 }
 
 #[derive(Clone,Copy,PartialEq)]
 enum State {
-    Disabled,
+    /// Sensor is disabled (but on)
+    Disabled, 
 
-    /// Enable sensor
-    Active,
-
-    /// Reading acceleration
-    ReadingAcceleration,
-
-    /// Enabling
+    /// Reading that sensor is present 
     Enabling,
 
-    /// Disabling
-    Disabling(usize, usize, usize),
+    /// Activate sensor for readings 
+    Activating,
+
+    /// Deactivate sensor from readings 
+    Deactivating,
+
+    /// Reading accelerometer data 
+    ReadingAcceleration,
 }
 
 pub struct FXOS8700CQ<'a> {
     i2c: &'a I2CDevice,
-    scale: Cell<u8>,
     state: Cell<State>,
     buffer: TakeCell<&'static mut [u8]>,
     callback: Cell<Option<Callback>>,
@@ -47,69 +48,70 @@ pub struct FXOS8700CQ<'a> {
 
 impl<'a> FXOS8700CQ<'a> {
     pub fn new(i2c: &'a I2CDevice, buffer: &'static mut [u8]) -> FXOS8700CQ<'a> {
-        // setup and return struct
         FXOS8700CQ {
             i2c: i2c,
-            scale: Cell::new(DEFAULT_SCALE),
-            state: Cell::new(State::Disabled),
+            state: Cell::new(State::Enabling),
             buffer: TakeCell::new(buffer),
             callback: Cell::new(None),
         }
     }
 
     fn start_read_accel(&self) {
-        // enable and configure FXOS8700CQ
-        if self.state.get() == State::Disabled {
-            self.buffer.take().map(|buf| {
-                // turn on i2c
-                self.i2c.enable();
-                // set to active mode
-                buf[0] = Registers::CtrlReg1 as u8;
-                // self.i2c.read(buf, 2);
-                // buf[1] = buf[1] | 0x01;
-                buf[1] = 0x01;
-                self.i2c.write(buf, 2);
-                self.state.set(State::Enabling);
-            });
-        }
-    }
-
-    fn set_scale(&self, scale: u8) {
         self.buffer.take().map(|buf| {
             self.i2c.enable();
-            buf[0] = Registers::XyzDataCfg as u8;
-            buf[1] = scale as u8;
-            self.scale.set(scale); 
-            self.i2c.write(buf, 2);
-            // disable i2c here? 
-        }); 
+            buf[0] = Registers::WhoAmI as u8;
+            self.i2c.write_read(buf, 1, 1);
+            self.state.set(State::Enabling);
+        });
     }
 }
 
 impl<'a> I2CClient for FXOS8700CQ<'a> {
     fn command_complete(&self, buffer: &'static mut [u8], _error: Error) {
-        match self.state.get() { 
+        match self.state.get() {
+            State::Disabled => {
+                self.i2c.disable(); 
+            }
             State::Enabling => {
-                buffer[0] = Registers::OutXLSB as u8;
-                self.i2c.write_read(buffer, 1, 6); // write byte of register we want to read from
+                buffer[0] = Registers::CtrlReg1 as u8; // CTRL_REG1
+                buffer[1] = 1; // active
+                self.i2c.write(buffer, 2);
+                self.state.set(State::Activating);
+            }
+            State::Activating => {
+                buffer[0] = Registers::OutXMSB as u8; 
+                self.i2c.write_read(buffer, 1, 6); // read 6 accel registers for xyz
                 self.state.set(State::ReadingAcceleration);
             }
             State::ReadingAcceleration => {
-                // self.i2c.read(buffer, 6); // read 6 bytes for accel
-                // let x = (((buffer[0] as usize) << 8) + buffer[1]) as usize;
-                // let y = (((buffer[2] as usize) << 8) + buffer[3]) as usize;
-                // let z = (((buffer[4] as usize) << 8) + buffer[5]) as usize;
-                self.state.set(State::Disabling(buffer[0] as usize,
-                                                buffer[2] as usize,
-                                                buffer[4] as usize));
-            }
-            State::Disabling(x, y, z) => {
-                self.i2c.disable();
-                self.state.set(State::Disabled);
-                self.buffer.replace(buffer);
+                let x = (((buffer[0] as u16) << 8) | buffer[1] as u16) as usize;
+                let y = (((buffer[2] as u16) << 8) | buffer[3] as u16) as usize;
+                let z = (((buffer[4] as u16) << 8) | buffer[5] as u16) as usize;
+
+                let x = ((x >> 2) * 976) / 1000;
+                let y = ((y >> 2) * 976) / 1000;
+                let z = ((z >> 2) * 976) / 1000;
+
                 self.callback.get().map(|mut cb| cb.schedule(x, y, z));
+
+                // buffer[0] = 0x01 as u8; // X-MSB register
+                // Reading 6 bytes will increment the register pointer through
+                // X-MSB, X-LSB, Y-MSB, Y-LSB, Z-MSB, Z-LSB
+                // self.i2c.write_read(buffer, 1, 6);
+
+                buffer[0] = Registers::CtrlReg1 as u8; // CTRL_REG1
+                buffer[1] = 0; // diasabled 
+                
+                // self.i2c.write(buffer, 2);
+                // self.state.set(State::Enabling);
+                // self.state.set(State::Deactivating);
             }
-            _ => {}
+            State::Deactivating => {
+                buffer[0] = Registers::WhoAmI as u8; // 0x0D == WHOAMI register
+                self.i2c.write_read(buffer, 1, 1);
+                self.state.set(State::Disabled);
+                // panic!(); 
+            }
         }
     }
 }
@@ -130,11 +132,6 @@ impl<'a> Driver for FXOS8700CQ<'a> {
             0 => {
                 // read acceleration 
                 self.start_read_accel();
-                0
-            }
-            1 => {
-                // set scale 
-                self.set_scale(_arg1 as u8); 
                 0
             }
             _ => -1,
