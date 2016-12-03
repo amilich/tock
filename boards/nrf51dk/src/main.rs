@@ -225,7 +225,7 @@ pub unsafe fn reset_handler() {
 
     // i2c scanner test
 
-    
+
 
     kernel::main(&platform,
                  &mut chip,

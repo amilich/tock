@@ -17,5 +17,5 @@ pub mod rtc;
 pub mod timer;
 pub mod clock;
 pub mod uart;
-pub mod i2c; 
+pub mod i2c;
 pub use chip::NRF51;
