@@ -42,3 +42,85 @@
 // ADDRESS 0x588 Address used in the TWI transfer
 //
 //
+
+// Listing of all registers related to the TWIM peripheral.
+// Section ??? of the datasheet
+#[repr(C, packed)]
+#[allow(dead_code)]
+struct Registers {
+
+}
+
+// Listing of all registers related to the TWIS peripheral.
+// Section ??? of the datasheet
+#[repr(C, packed)]
+#[allow(dead_code)]
+struct TWISRegisters {
+
+}
+
+// Three main I2C speeds
+#[derive(Clone,Copy)]
+pub enum Speed {
+    Standard100k,
+    Fast400k,
+}
+
+// This represents an abstraction of the peripheral hardware.
+pub struct I2CHw {
+
+}
+
+impl I2CHw {
+    const fn new() -> I2CHw {
+
+    }
+}
+
+impl DMAClient for I2CHw {
+
+}
+
+impl hil::i2c::I2CMaster for I2CHw {
+	/// This enables the entire I2C peripheral
+    fn enable(&self) {
+    }
+
+    /// This disables the entire I2C peripheral
+    fn disable(&self) {
+    }
+
+    fn write(&self, addr: u8, data: &'static mut [u8], len: u8) {
+    }
+
+    fn read(&self, addr: u8, data: &'static mut [u8], len: u8) {
+    }
+
+    fn write_read(&self, addr: u8, data: &'static mut [u8], write_len: u8, read_len: u8) {
+    }
+}
+
+impl hil::i2c::I2CSlave for I2CHw {
+    fn enable(&self) {
+    }
+
+    /// This disables the entire I2C peripheral
+    fn disable(&self) {
+    }
+
+    fn set_address(&self, addr: u8) {
+    }
+
+    fn write_receive(&self, data: &'static mut [u8], max_len: u8) {
+    }
+
+    fn read_send(&self, data: &'static mut [u8], max_len: u8) {
+    }
+
+    fn listen(&self) {
+    }
+}
+
+impl hil::i2c::I2CMasterSlave for I2CHw {
+
+}
