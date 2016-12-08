@@ -149,8 +149,8 @@ impl I2CHw {
     }
 
     pub fn enable_tx_interrupts(&self) {
-        // let regs: &mut Registers = unsafe { mem::transmute(self.regs) };
-        // regs.reg_intenset.set(1 << 7 as u32);
+        let regs: &mut Registers = unsafe { mem::transmute(self.regs) };
+        regs.reg_intenset.set(1 << 7 as u32);
     }
 
     pub fn disable_rx_interrupts(&self) {
@@ -162,11 +162,22 @@ impl I2CHw {
         // let regs: &mut Registers = unsafe { mem::transmute(self.regs) };
         // regs.reg_intenclr.set(1 << 7 as u32);
     }
+
+    pub fn write(&self, address: u32, data: &'static mut [u8], len: usize) {
+        let regs: &mut Registers = unsafe { mem::transmute(self.regs) };
+        regs.reg_address.set(address); 
+        self.enable_tx_interrupts();
+        regs.task_starttx.set(1);
+        self.buffer.replace(data); 
+        self.len.set(len); 
+    }
 }
 
 impl i2c::I2CMaster for I2CHw {
 	/// This enables the entire I2C peripheral
     fn enable(&self) {
+        // set registers to sda/scl? 
+        // config as read or write? 
     }
 
     /// This disables the entire I2C peripheral
@@ -174,6 +185,7 @@ impl i2c::I2CMaster for I2CHw {
     }
 
     fn write(&self, addr: u8, data: &'static mut [u8], len: u8) {
+
     }
 
     fn read(&self, addr: u8, data: &'static mut [u8], len: u8) {
