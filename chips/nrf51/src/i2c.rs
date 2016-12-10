@@ -169,7 +169,14 @@ impl I2CHw {
         self.enable_tx_interrupts();
         regs.task_starttx.set(1);
         self.buffer.replace(data); 
+        self.index.set(0 as usize); 
         self.len.set(len); 
+
+        self.buffer.map(|buffer| {
+            regs.reg_txd.set(buffer[self.index.get()] as u32);
+            let next_index = self.index.get() + 1;
+            self.index.set(next_index);
+        }); 
     }
 
     pub fn handle_interrupt(&mut self) { 
@@ -179,7 +186,7 @@ impl I2CHw {
         if tx {
             if self.len.get() == self.index.get() {
                 regs.task_stop.set(1 as u32);
-                self.index.set(0 as u32); 
+                self.index.set(0 as usize); 
 
                 // done writing? 
 
@@ -207,7 +214,7 @@ impl i2c::I2CMaster for I2CHw {
     }
 
     fn write(&self, addr: u8, data: &'static mut [u8], len: u8) {
-
+        I2CHw::write(self, addr as u32, data, len as usize);
     }
 
     fn read(&self, addr: u8, data: &'static mut [u8], len: u8) {
