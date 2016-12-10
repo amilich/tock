@@ -171,6 +171,28 @@ impl I2CHw {
         self.buffer.replace(data); 
         self.len.set(len); 
     }
+
+    pub fn handle_interrupt(&mut self) { 
+        let regs: &Registers = unsafe { mem::transmute(self.regs) };
+        let tx = regs.event_txdsent.get() != 0;
+
+        if tx {
+            if self.len.get() == self.index.get() {
+                regs.task_stop.set(1 as u32);
+                self.index.set(0 as u32); 
+
+                // done writing? 
+
+                return;
+            }
+
+            self.buffer.map(|buffer| {
+                regs.reg_txd.set(buffer[self.index.get()] as u32);
+                let next_index = self.index.get() + 1;
+                self.index.set(next_index);
+            });
+        }
+    }
 }
 
 impl i2c::I2CMaster for I2CHw {
