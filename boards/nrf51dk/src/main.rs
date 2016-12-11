@@ -37,6 +37,12 @@
 #![no_main]
 #![feature(lang_items)]
 
+#[macro_use]
+pub mod io;
+
+#[allow(dead_code)]
+mod i2c_dummy;
+
 extern crate cortexm0;
 extern crate capsules;
 #[macro_use(static_init)]
