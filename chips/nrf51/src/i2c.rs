@@ -114,6 +114,8 @@ pub struct I2CHw {
     buffer: TakeCell<&'static mut [u8]>,
     len: Cell<usize>,
     index: Cell<usize>,
+    master_client: TakeCell<&'static i2c::I2CHwMasterClient>,
+    slave_client: TakeCell<&'static i2c::I2CHwSlaveClient>,
 }
 
 impl I2CHw {
@@ -123,6 +125,8 @@ impl I2CHw {
             buffer: TakeCell::empty(),
             len: Cell::new(0),
             index: Cell::new(0),
+            master_client: TakeCell::empty(),
+            slave_client: TakeCell::empty(),
         }
     }
 
@@ -163,6 +167,14 @@ impl I2CHw {
         // regs.reg_intenclr.set(1 << 7 as u32);
     }
 
+    pub fn set_master_client(&self, client: &'static i2c::I2CHwMasterClient) {
+        self.master_client.replace(client);
+    }
+
+    pub fn set_slave_client(&self, client: &'static i2c::I2CHwSlaveClient) {
+        self.slave_client.replace(client);
+    }
+
     pub fn write(&self, address: u32, data: &'static mut [u8], len: usize) {
         let regs: &mut Registers = unsafe { mem::transmute(self.regs) };
         regs.reg_address.set(address); 
@@ -181,9 +193,9 @@ impl I2CHw {
 
     pub fn handle_interrupt(&mut self) { 
         let regs: &Registers = unsafe { mem::transmute(self.regs) };
-        let tx = regs.event_txdsent.get() != 0;
+        let tx_interrupt = regs.event_txdsent.get() != 0;
 
-        if tx {
+        if tx_interrupt {
             if self.len.get() == self.index.get() {
                 regs.task_stop.set(1 as u32);
                 self.index.set(0 as usize); 

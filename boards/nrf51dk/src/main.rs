@@ -229,9 +229,6 @@ pub unsafe fn reset_handler() {
     chip.systick().reset();
     chip.systick().enable(true);
 
-    // i2c scanner test
-
-
 
     kernel::main(&platform,
                  &mut chip,

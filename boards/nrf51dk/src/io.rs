@@ -19,18 +19,12 @@ impl Write for Writer {
                 parity: uart::Parity::None,
                 hw_flow_control: false,
             });
-            // uart.reset();
-            // uart.enable_tx();
 
         }
-        // XXX: I'd like to get this working the "right" way, but I'm not sure how
         for c in s.bytes() {
             uart.send_byte(c);
             while !uart.tx_ready() {}
         }
-
-        // let mut bytes = s.as_bytes(); 
-        // uart.transmit(bytes, s.len());
         Ok(())
     }
 }
