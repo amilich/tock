@@ -51,6 +51,7 @@ extern crate nrf51;
 
 use capsules::timer::TimerDriver;
 use capsules::virtual_alarm::{MuxAlarm, VirtualMuxAlarm};
+use capsules::virtual_i2c::{I2CDevice, MuxI2C};
 use kernel::{Chip, SysTick};
 use kernel::hil::uart::UART;
 use nrf51::rtc::{RTC, Rtc};
@@ -228,6 +229,9 @@ pub unsafe fn reset_handler() {
     let mut chip = nrf51::chip::NRF51::new();
     chip.systick().reset();
     chip.systick().enable(true);
+
+    let mux_i2c = static_init!(MuxI2C<'static>, MuxI2C::new(&nrf51::i2c::I2C0), 20);
+    nrf51::i2c::I2C0.set_master_client(mux_i2c);
 
     println!("Kernel start\n");
     i2c_dummy::i2c_scan_slaves();

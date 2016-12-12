@@ -47,4 +47,5 @@ pub fn i2c_scan_slaves() {
 
     println!("Scanning for I2C devices...");
     dev.write(i2c_client.dev_id.get() as u32, unsafe { &mut DATA }, 2);
+    println!("Write returned"); 
 }

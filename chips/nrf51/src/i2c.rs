@@ -128,7 +128,7 @@ impl I2CHw {
             index: Cell::new(0),
             master_client: TakeCell::empty(),
             slave_client: TakeCell::empty(),
-        }
+        } 
     }
 
     fn configure(&self, sda: u32, scl: u32) {
@@ -136,16 +136,20 @@ impl I2CHw {
         // TODO use struct to limit pins accessible by i2c
         regs.reg_psel_scl.set(sda);
         regs.reg_psel_sda.set(scl);
+        regs.reg_enable.set(1); // set enable register 
     }
 
     pub fn enable_nvic(&self) {
         // SPI0_TWI0
         // SPI1_TWI1
-        // nvic::enable(NvicIdx::???);
+        nvic::enable(NvicIdx::SPI0_TWI0);
+        nvic::enable(NvicIdx::SPI1_TWI1);
     }
 
     pub fn disable_nvic(&self) {
-        // nvic::disable(NvicIdx::???);
+        // ???? which one 
+        nvic::disable(NvicIdx::SPI0_TWI0);
+        nvic::disable(NvicIdx::SPI1_TWI1);
     }
 
     pub fn enable_rx_interrupts(&self) {
@@ -177,6 +181,8 @@ impl I2CHw {
     }
 
     pub fn write(&self, address: u32, data: &'static mut [u8], len: usize) {
+        self.configure(0 as u32, 1 as u32); // TODO put this somewhere else
+
         let regs: &mut Registers = unsafe { mem::transmute(self.regs) };
         regs.reg_address.set(address);
         self.enable_tx_interrupts();
@@ -190,10 +196,18 @@ impl I2CHw {
             let next_index = self.index.get() + 1;
             self.index.set(next_index);
         });
-        // panic!();
+        self.enable_nvic();
     }
 
+    // Notes: 
+    /* 
+        Do we want interrupst (chip.rs) for both TWI pins? 
+        ????
+        Why don't interrupts come through 
+    */
+
     pub fn handle_interrupt(&mut self) {
+        panic!();
         let regs: &Registers = unsafe { mem::transmute(self.regs) };
         let tx_interrupt = regs.event_txdsent.get() != 0;
 
@@ -201,7 +215,7 @@ impl I2CHw {
             if self.len.get() == self.index.get() {
                 regs.task_stop.set(1 as u32);
                 self.index.set(0 as usize);
-
+                
                 // done writing?
 
                 return;
