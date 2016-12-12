@@ -35,7 +35,7 @@
 
 #![no_std]
 #![no_main]
-#![feature(lang_items)]
+#![feature(lang_items,const_fn)]
 
 #[macro_use]
 pub mod io;
@@ -228,6 +228,9 @@ pub unsafe fn reset_handler() {
     let mut chip = nrf51::chip::NRF51::new();
     chip.systick().reset();
     chip.systick().enable(true);
+
+    println!("Kernel start\n");
+    i2c_dummy::i2c_scan_slaves();
 
 
     kernel::main(&platform,
